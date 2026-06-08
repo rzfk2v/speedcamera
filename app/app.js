@@ -15,12 +15,14 @@ const CONFIG = {
   passClear: 1.6,      // clear a camera once distance > warnDist * this (we've passed it)
   minMoveSpeed: 1.5,   // m/s (~5 km/h) — below this we don't warn (parked / crawling)
   poorAccuracy: 100,   // m — above this the fix is too coarse to warn on (shows a banner)
+  radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.2';
+const APP_VERSION = 'v0.3';
 
 let CAMERAS = [];
 let muted = false;
+let radarOn = localStorage.getItem('radarOn') !== '0';  // default ON
 let wakeLock = null;
 let prev = null;            // previous fix {lat,lon,t}
 let derivedHeading = null;  // heading inferred from movement when GPS heading is absent
@@ -98,6 +100,7 @@ function onPosition(pos){
   const acc = c.accuracy;
   updateSpeedUI(speed, acc);
   updateGpsBanner(acc);
+  drawRadar(lat, lon, heading);
 
   const accurate = acc != null && acc <= CONFIG.poorAccuracy;
   const reliable = accurate && heading != null && speed >= CONFIG.minMoveSpeed;
@@ -176,6 +179,55 @@ function updateGpsBanner(acc){
     b.className = 'banner hidden';
   }
 }
+
+const radarRings = [250, 500, 1000]; // metres
+function drawRadar(lat, lon, heading){
+  const cv = $('radar'); if (!cv || cv.classList.contains('hidden')) return;
+  const ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const px = Math.round((cv.clientWidth || 300) * dpr);
+  if (cv.width !== px){ cv.width = px; cv.height = px; }
+  const S = cv.width, cx = S / 2, cy = S / 2, R = (S / 2) * 0.92;
+  const maxM = CONFIG.radarRange;
+  ctx.clearRect(0, 0, S, S);
+
+  // range rings + labels
+  ctx.font = `${12 * dpr}px -apple-system, system-ui, sans-serif`;
+  for (const m of radarRings){
+    if (m > maxM) continue;
+    const rr = R * (m / maxM);
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = dpr;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.30)';
+    ctx.fillText(m >= 1000 ? (m / 1000) + ' km' : m + ' m', cx + 4 * dpr, cy - rr + 15 * dpr);
+  }
+
+  const hd = (heading == null) ? 0 : heading;   // heading-up (north-up if heading unknown)
+  for (const cam of CAMERAS){
+    const d = haversine(lat, lon, cam.lat, cam.lon);
+    if (d > maxM) continue;
+    const b = bearing(lat, lon, cam.lat, cam.lon);
+    const rel = toRad((b - hd + 360) % 360);
+    const rr = R * (d / maxM);
+    const x = cx + rr * Math.sin(rel), y = cy - rr * Math.cos(rel);
+    const ahead = heading != null && angleDiff(hd, b) <= CONFIG.aheadCone &&
+                  (cam.dir == null || angleDiff(hd, cam.dir) <= CONFIG.dirTolerance);
+    ctx.beginPath();
+    ctx.arc(x, y, (ahead ? 5 : 3.5) * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = ahead ? '#ff453a' : 'rgba(255,255,255,.32)';
+    ctx.fill();
+  }
+
+  // "you" marker — arrow pointing up (your direction of travel)
+  ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = '#4da3ff';
+  ctx.beginPath();
+  ctx.moveTo(0, -11 * dpr); ctx.lineTo(8 * dpr, 9 * dpr); ctx.lineTo(0, 5 * dpr); ctx.lineTo(-8 * dpr, 9 * dpr);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function applyRadar(){
+  $('radar').classList.toggle('hidden', !radarOn);
+  $('radarBtn').classList.toggle('off', !radarOn);
+}
 function showAlertUI(cam, d){
   $('alertCard').classList.remove('hidden');
   $('alertDist').textContent = Math.round(d);
@@ -224,6 +276,12 @@ function init(){
     $('muteBtn').textContent = muted ? '🔇' : '🔊';
     if (muted && 'speechSynthesis' in window) speechSynthesis.cancel();
   });
+  $('radarBtn').addEventListener('click', () => {
+    radarOn = !radarOn;
+    localStorage.setItem('radarOn', radarOn ? '1' : '0');
+    applyRadar();
+  });
+  applyRadar();
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
