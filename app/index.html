@@ -17,13 +17,19 @@
       <h1>🎥 Nordic Speed&nbsp;Camera Alert</h1>
       <p id="startInfo">Loading cameras…</p>
       <button id="startBtn" disabled>START</button>
-      <p class="fineprint">Keeps the screen awake and speaks warnings.
-        Mount the phone and connect the car over Bluetooth audio. Drive safe — this is an aid, not a substitute for the speedometer.</p>
+      <p class="fineprint"><strong>Private test project — not a finished product.</strong>
+        It's experimental and <strong>will</strong> have bugs, miss cameras, or show wrong
+        speed limits. Use entirely at your own risk and never rely on it — it's only a
+        driving aid, not a substitute for watching the road and your speedometer.
+        Keeps the screen awake and speaks warnings; mount the phone and use Bluetooth audio.</p>
     </div>
   </div>
 
   <!-- Driving HUD -->
   <main id="hud" hidden>
+    <div id="version" class="version"></div>
+    <div id="gpsBanner" class="banner hidden"></div>
+
     <div id="alertCard" class="alert hidden">
       <div class="alert-title">SPEED CAMERA</div>
       <div class="alert-dist"><span id="alertDist">–</span> m</div>

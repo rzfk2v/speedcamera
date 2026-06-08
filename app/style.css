@@ -62,3 +62,14 @@ body.danger{ background:#3a0d0a; }
   background:rgba(255,255,255,.08); color:var(--fg);
   border:none; border-radius:12px; padding:10px 14px; font-size:20px; cursor:pointer;
 }
+
+/* GPS status banner + version tag */
+.banner{
+  position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:5;
+  max-width:92vw; padding:10px 16px; border-radius:12px;
+  background:rgba(255,255,255,.10); color:var(--fg);
+  font-size:15px; font-weight:600; text-align:center; line-height:1.35;
+}
+.banner.warn{ background:rgba(255,159,10,.20); color:#ffcf6a; }
+.version{ position:fixed; top:18px; left:16px; color:var(--muted); font-size:13px; }
+.hidden{ display:none !important; }

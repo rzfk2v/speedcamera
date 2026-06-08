@@ -26,7 +26,12 @@ python3 -m http.server 8000 --directory app    # serve locally for testing
 
 ## ⚠️ Disclaimer
 
-A driving aid, not a substitute for watching the road and your speedometer. Camera
-data is community-sourced and may be incomplete or out of date. Speed-camera-warning
-apps are restricted or illegal in some countries (e.g. France, Switzerland) — check
-local law before use.
+**This is a private, experimental hobby project — not a finished or supported product.**
+Expect bugs, missing cameras, and wrong data. If you come across it, don't expect a
+polished app: it can and will have errors. Use it entirely at your own risk and never
+rely on it.
+
+It is a driving aid only, never a substitute for watching the road and your speedometer.
+Camera data is community-sourced (OpenStreetMap) and may be incomplete or out of date.
+Speed-camera-warning apps are restricted or illegal in some countries (e.g. France,
+Switzerland) — check local law before use.

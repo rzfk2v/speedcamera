@@ -14,7 +14,10 @@ const CONFIG = {
   dirTolerance: 70,    // deg — camera's enforced direction must match heading within this
   passClear: 1.6,      // clear a camera once distance > warnDist * this (we've passed it)
   minMoveSpeed: 1.5,   // m/s (~5 km/h) — below this we don't warn (parked / crawling)
+  poorAccuracy: 100,   // m — above this the fix is too coarse to warn on (shows a banner)
 };
+
+const APP_VERSION = 'v0.2';
 
 let CAMERAS = [];
 let muted = false;
@@ -92,9 +95,12 @@ function onPosition(pos){
     ? c.heading : derivedHeading;
   prev = { lat, lon, t };
 
-  updateSpeedUI(speed, c.accuracy);
+  const acc = c.accuracy;
+  updateSpeedUI(speed, acc);
+  updateGpsBanner(acc);
 
-  const reliable = heading != null && speed >= CONFIG.minMoveSpeed;
+  const accurate = acc != null && acc <= CONFIG.poorAccuracy;
+  const reliable = accurate && heading != null && speed >= CONFIG.minMoveSpeed;
   const target = reliable ? nearestAhead(lat, lon, heading) : null;
   handleWarning(target, speed);
   updateNextCamUI(target);
@@ -158,6 +164,18 @@ function updateSpeedUI(speed, acc){
 function updateNextCamUI(target){
   $('nextCam').textContent = target ? `camera ${Math.round(target._d)} m ahead` : 'no camera ahead';
 }
+function updateGpsBanner(acc){
+  const b = $('gpsBanner');
+  if (acc == null){
+    b.textContent = '📡 Acquiring GPS…';
+    b.className = 'banner';
+  } else if (acc > CONFIG.poorAccuracy){
+    b.textContent = `⚠ GPS accuracy low (±${Math.round(acc)} m) — turn on Precise location and move to open sky`;
+    b.className = 'banner warn';
+  } else {
+    b.className = 'banner hidden';
+  }
+}
 function showAlertUI(cam, d){
   $('alertCard').classList.remove('hidden');
   $('alertDist').textContent = Math.round(d);
@@ -182,6 +200,7 @@ document.addEventListener('visibilitychange', () => {
 function start(){
   $('startScreen').hidden = true;
   $('hud').hidden = false;
+  updateGpsBanner(null);   // show "Acquiring GPS…" until the first fix arrives
   beep(0.001, 440);   // unlock WebAudio on the user gesture
   speak(' ');         // prime speechSynthesis
   requestWakeLock();
@@ -192,9 +211,10 @@ function start(){
 }
 
 function init(){
+  $('version').textContent = APP_VERSION;
   loadCameras().then(d => {
     $('camCount').textContent = d.count;
-    $('startInfo').textContent = `${d.count} cameras loaded · OSM ${d.generated}`;
+    $('startInfo').textContent = `${d.count} cameras loaded · OSM ${d.generated} · ${APP_VERSION}`;
     $('startBtn').disabled = false;
   }).catch(e => { $('startInfo').textContent = 'Failed to load cameras: ' + e; });
 
@@ -210,5 +230,5 @@ function init(){
 init();
 
 // Test hook: drive a synthetic position, e.g. __sim(59.5882,16.9969, 25, 180)
-window.__sim = (lat, lon, speed = 25, heading = null) =>
-  onPosition({ coords: { latitude: lat, longitude: lon, speed, heading, accuracy: 5 }, timestamp: Date.now() });
+window.__sim = (lat, lon, speed = 25, heading = null, accuracy = 5) =>
+  onPosition({ coords: { latitude: lat, longitude: lon, speed, heading, accuracy }, timestamp: Date.now() });
