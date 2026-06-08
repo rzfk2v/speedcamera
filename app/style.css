@@ -58,10 +58,8 @@ body.danger{ background:#3a0d0a; }
   position:fixed; bottom:20px; left:0; right:0; padding:0 16px;
   text-align:center; color:var(--muted); font-size:14px;
 }
-#muteBtn{ position:fixed; top:16px; right:16px; }
-#radarBtn{ position:fixed; top:16px; right:72px; }
-#menuBtn{ position:fixed; top:16px; right:128px; }
-.ghost.off{ opacity:.4; }
+#menuBtn{ position:fixed; top:16px; right:16px; }
+#muteBtn{ position:fixed; top:16px; right:72px; }
 
 /* Settings sheet */
 .sheet{

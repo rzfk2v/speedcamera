@@ -18,7 +18,7 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.5';
+const APP_VERSION = 'v0.6';
 
 let CAMERAS = [];
 let muted = false;
@@ -259,7 +259,6 @@ function drawRadar(lat, lon, heading){
 }
 function applyRadar(){
   $('radar').classList.toggle('hidden', !radarOn);
-  $('radarBtn').classList.toggle('off', !radarOn);
 }
 function showAlertUI(cam, d){
   $('alertCard').classList.remove('hidden');
@@ -276,6 +275,7 @@ function clearAlertUI(){
 function syncSegs(){
   document.querySelectorAll('#unitSeg button').forEach(b => b.classList.toggle('on', b.dataset.units === units));
   document.querySelectorAll('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  document.querySelectorAll('#radarSeg button').forEach(b => b.classList.toggle('on', (b.dataset.radar === 'on') === radarOn));
 }
 function populateVoices(){
   const sel = $('voiceSel'); if (!sel) return;
@@ -328,10 +328,11 @@ function init(){
     $('muteBtn').textContent = muted ? '🔇' : '🔊';
     if (muted && 'speechSynthesis' in window) speechSynthesis.cancel();
   });
-  $('radarBtn').addEventListener('click', () => {
-    radarOn = !radarOn;
+  $('radarSeg').addEventListener('click', e => {
+    const r = e.target.dataset.radar; if (!r) return;
+    radarOn = (r === 'on');
     localStorage.setItem('radarOn', radarOn ? '1' : '0');
-    applyRadar();
+    syncSegs(); applyRadar();
   });
   applyRadar();
 
