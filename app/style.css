@@ -21,6 +21,7 @@ body.danger{ background:#3a0d0a; }
   padding:24px; background:var(--bg);
 }
 .start-card{ text-align:center; max-width:440px; }
+.start-icon{ width:92px; height:92px; border-radius:22px; margin-bottom:18px; box-shadow:0 8px 30px rgba(0,0,0,.5); }
 .start-card h1{ font-size:27px; line-height:1.25; margin-bottom:18px; }
 #startInfo{ color:var(--muted); margin-bottom:26px; font-size:16px; }
 #startBtn{
@@ -59,7 +60,38 @@ body.danger{ background:#3a0d0a; }
 }
 #muteBtn{ position:fixed; top:16px; right:16px; }
 #radarBtn{ position:fixed; top:16px; right:72px; }
+#menuBtn{ position:fixed; top:16px; right:128px; }
 .ghost.off{ opacity:.4; }
+
+/* Settings sheet */
+.sheet{
+  width:min(92vw,440px); max-height:86vh; overflow:auto;
+  background:#141a22; border-radius:20px; padding:22px 22px 26px;
+}
+.sheet h2{ font-size:22px; margin-bottom:14px; text-align:center; }
+.srow{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px 2px; border-top:1px solid rgba(255,255,255,.07);
+}
+.srow:first-of-type{ border-top:none; }
+.srow.col{ flex-direction:column; align-items:stretch; }
+.srow.col > span{ margin-bottom:10px; }
+.srow > span{ font-size:16px; }
+.seg{ display:flex; background:rgba(255,255,255,.07); border-radius:11px; padding:3px; }
+.seg button{
+  border:none; background:transparent; color:var(--muted);
+  padding:9px 16px; border-radius:9px; font-size:15px; font-weight:600; cursor:pointer;
+}
+.seg button.on{ background:var(--warn); color:#000; }
+#voiceSel{
+  width:100%; padding:12px; font-size:15px; border-radius:11px;
+  background:#0d1218; color:var(--fg); border:1px solid rgba(255,255,255,.12);
+}
+#voiceTest{ margin-top:10px; align-self:flex-start; font-size:14px; }
+.primary{
+  width:100%; margin-top:22px; padding:15px; font-size:18px; font-weight:700;
+  border:none; border-radius:14px; background:var(--warn); color:#000; cursor:pointer;
+}
 .ghost{
   background:rgba(255,255,255,.08); color:var(--fg);
   border:none; border-radius:12px; padding:10px 14px; font-size:20px; cursor:pointer;

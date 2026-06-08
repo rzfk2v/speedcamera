@@ -18,11 +18,14 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.4';
+const APP_VERSION = 'v0.5';
 
 let CAMERAS = [];
 let muted = false;
-let radarOn = localStorage.getItem('radarOn') !== '0';  // default ON
+let radarOn = localStorage.getItem('radarOn') !== '0';   // default ON
+let units = localStorage.getItem('units') || 'metric';   // 'metric' | 'imperial'
+let lang  = localStorage.getItem('lang')  || 'en';       // 'en' | 'sv'
+let voiceName = localStorage.getItem('voice') || '';     // '' = auto
 let wakeLock = null;
 let prev = null;            // previous fix {lat,lon,t}
 let derivedHeading = null;  // heading inferred from movement when GPS heading is absent
@@ -48,6 +51,32 @@ function bearing(lat1, lon1, lat2, lon2){
 function angleDiff(a, b){
   const d = Math.abs(a - b) % 360;
   return d > 180 ? 360 - d : d;
+}
+
+// ---------- units & language ----------
+function speedNum(mps){ return Math.round(mps * (units === 'imperial' ? 2.236936 : 3.6)); }
+function speedUnit(){ return units === 'imperial' ? 'mph' : 'km/h'; }
+function limitNum(kmh){ return units === 'imperial' ? Math.round(kmh * 0.621371) : kmh; }
+function distLabel(m){
+  if (units === 'imperial'){
+    const yd = m * 1.093613;
+    if (yd >= 1760){ const mi = yd / 1760; return (Number.isInteger(mi) ? mi : mi.toFixed(1)) + ' mi'; }
+    return Math.round(yd) + ' yd';
+  }
+  if (m >= 1000){ const km = m / 1000; return (Number.isInteger(km) ? km : km.toFixed(1)) + ' km'; }
+  return Math.round(m) + ' m';
+}
+function cameraPhrase(limitKmh){
+  const n = limitKmh ? limitNum(limitKmh) : null;
+  if (lang === 'sv') return n ? `Fartkamera, ${n}` : 'Fartkamera';
+  return n ? `Speed camera ahead, limit ${n}` : 'Speed camera ahead';
+}
+function pickVoice(){
+  const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
+  if (voiceName){ const v = vs.find(v => v.name === voiceName); if (v) return v; }
+  const pref = lang === 'sv' ? 'sv' : 'en';
+  return vs.find(v => v.lang.toLowerCase().startsWith(pref) && v.localService)
+      || vs.find(v => v.lang.toLowerCase().startsWith(pref)) || null;
 }
 
 // ---------- data ----------
@@ -147,25 +176,29 @@ function beep(dur = 0.12, freq = 880){
     o.start(now); o.stop(now + dur + 0.02);
   }catch(e){ /* ignore */ }
 }
+function utter(text){            // build an utterance with the chosen voice/lang
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice();
+  if (v){ u.voice = v; u.lang = v.lang; } else u.lang = lang === 'sv' ? 'sv-SE' : 'en-GB';
+  u.rate = 1.05;
+  return u;
+}
 function speak(text){
   if (muted || !('speechSynthesis' in window)) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 1.05; u.lang = 'en-GB';
   speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+  speechSynthesis.speak(utter(text));
 }
-function speakCamera(cam){
-  speak(cam.limit ? `Speed camera ahead, limit ${cam.limit}` : 'Speed camera ahead');
-}
+function speakCamera(cam){ speak(cameraPhrase(cam.limit)); }
 
 // ---------- UI ----------
 const $ = id => document.getElementById(id);
 function updateSpeedUI(speed, acc){
-  $('speed').textContent = Math.round(speed * 3.6);
-  $('gpsStatus').textContent = acc != null ? `GPS ±${Math.round(acc)} m` : 'waiting for GPS…';
+  $('speed').textContent = speedNum(speed);
+  $('speedUnit').textContent = speedUnit();
+  $('gpsStatus').textContent = acc != null ? `GPS ±${distLabel(acc)}` : 'waiting for GPS…';
 }
 function updateNextCamUI(target){
-  $('nextCam').textContent = target ? `camera ${Math.round(target._d)} m ahead` : 'no camera ahead';
+  $('nextCam').textContent = target ? `camera ${distLabel(target._d)} ahead` : 'no camera ahead';
 }
 function updateGpsBanner(acc){
   const b = $('gpsBanner');
@@ -173,7 +206,7 @@ function updateGpsBanner(acc){
     b.textContent = '📡 Acquiring GPS…';
     b.className = 'banner';
   } else if (acc > CONFIG.poorAccuracy){
-    b.textContent = `⚠ GPS accuracy low (±${Math.round(acc)} m) — turn on Precise location and move to open sky`;
+    b.textContent = `⚠ GPS accuracy low (±${distLabel(acc)}) — turn on Precise location and move to open sky`;
     b.className = 'banner warn';
   } else {
     b.className = 'banner hidden';
@@ -199,7 +232,7 @@ function drawRadar(lat, lon, heading){
     ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = dpr;
     ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,.30)';
-    ctx.fillText(m >= 1000 ? (m / 1000) + ' km' : m + ' m', cx + 4 * dpr, cy - rr + 15 * dpr);
+    ctx.fillText(distLabel(m), cx + 4 * dpr, cy - rr + 15 * dpr);
   }
 
   const hd = (heading == null) ? 0 : heading;   // heading-up (north-up if heading unknown)
@@ -230,14 +263,32 @@ function applyRadar(){
 }
 function showAlertUI(cam, d){
   $('alertCard').classList.remove('hidden');
-  $('alertDist').textContent = Math.round(d);
-  $('alertLimit').textContent = cam.limit ? `limit ${cam.limit} km/h` : '';
+  $('alertDist').textContent = distLabel(d);
+  $('alertLimit').textContent = cam.limit ? `limit ${limitNum(cam.limit)} ${speedUnit()}` : '';
   document.body.classList.toggle('danger', d <= CONFIG.nearDist);
 }
 function clearAlertUI(){
   $('alertCard').classList.add('hidden');
   document.body.classList.remove('danger');
 }
+
+// ---------- settings ----------
+function syncSegs(){
+  document.querySelectorAll('#unitSeg button').forEach(b => b.classList.toggle('on', b.dataset.units === units));
+  document.querySelectorAll('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+}
+function populateVoices(){
+  const sel = $('voiceSel'); if (!sel) return;
+  const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
+  const pref = lang === 'sv' ? 'sv' : 'en';
+  const match = vs.filter(v => v.lang.toLowerCase().startsWith(pref));
+  const list = match.length ? match : vs;
+  sel.innerHTML = '<option value="">Auto (best match)</option>' +
+    list.map(v => `<option value="${v.name.replace(/"/g, '')}">${v.name} (${v.lang})${v.localService ? '' : ' ☁'}</option>`).join('');
+  sel.value = voiceName;
+}
+function openSettings(){ syncSegs(); populateVoices(); $('settings').hidden = false; }
+function closeSettings(){ $('settings').hidden = true; }
 
 // ---------- lifecycle ----------
 async function requestWakeLock(){
@@ -264,6 +315,7 @@ function start(){
 
 function init(){
   $('version').textContent = APP_VERSION;
+  $('speedUnit').textContent = speedUnit();
   loadCameras().then(d => {
     $('camCount').textContent = d.count;
     $('startInfo').textContent = `${d.count} cameras loaded · OSM ${d.generated} · ${APP_VERSION}`;
@@ -282,6 +334,24 @@ function init(){
     applyRadar();
   });
   applyRadar();
+
+  // settings menu
+  $('menuBtn').addEventListener('click', openSettings);
+  $('settingsDone').addEventListener('click', closeSettings);
+  $('settings').addEventListener('click', e => { if (e.target.id === 'settings') closeSettings(); });
+  $('unitSeg').addEventListener('click', e => {
+    const u = e.target.dataset.units; if (!u) return;
+    units = u; localStorage.setItem('units', u); syncSegs(); $('speedUnit').textContent = speedUnit();
+  });
+  $('langSeg').addEventListener('click', e => {
+    const l = e.target.dataset.lang; if (!l) return;
+    lang = l; localStorage.setItem('lang', l); syncSegs(); populateVoices();
+  });
+  $('voiceSel').addEventListener('change', e => { voiceName = e.target.value; localStorage.setItem('voice', voiceName); });
+  $('voiceTest').addEventListener('click', () => {
+    if ('speechSynthesis' in window){ speechSynthesis.cancel(); speechSynthesis.speak(utter(cameraPhrase(60))); }
+  });
+  if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { if (!$('settings').hidden) populateVoices(); };
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }

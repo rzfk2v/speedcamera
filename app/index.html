@@ -18,7 +18,8 @@
   <!-- Start overlay: needed to grant geolocation + unlock audio on a user gesture -->
   <div id="startScreen" class="overlay">
     <div class="start-card">
-      <h1>🎥 Nordic Speed&nbsp;Camera Alert</h1>
+      <img class="start-icon" src="icon.svg" alt="" width="92" height="92">
+      <h1>Nordic Speed&nbsp;Camera Alert</h1>
       <p id="startInfo">Loading cameras…</p>
       <button id="startBtn" disabled>START</button>
       <p class="fineprint"><strong>Private test project — not a finished product.</strong>
@@ -36,7 +37,7 @@
 
     <div id="alertCard" class="alert hidden">
       <div class="alert-title">SPEED CAMERA</div>
-      <div class="alert-dist"><span id="alertDist">–</span> m</div>
+      <div class="alert-dist" id="alertDist">–</div>
       <div class="alert-limit" id="alertLimit"></div>
     </div>
 
@@ -44,7 +45,7 @@
 
     <div id="speedBox">
       <div id="speed">0</div>
-      <div class="unit">km/h</div>
+      <div class="unit" id="speedUnit">km/h</div>
     </div>
 
     <div id="statusLine">
@@ -53,9 +54,41 @@
       <span id="nextCam">no camera ahead</span>
     </div>
 
+    <button id="menuBtn" class="ghost" title="Settings">☰</button>
     <button id="radarBtn" class="ghost" title="Toggle radar">🗺️</button>
     <button id="muteBtn" class="ghost" title="Mute warnings">🔊</button>
   </main>
+
+  <!-- Settings sheet -->
+  <div id="settings" class="overlay" hidden>
+    <div class="sheet">
+      <h2>Settings</h2>
+
+      <div class="srow">
+        <span>Units</span>
+        <div class="seg" id="unitSeg">
+          <button data-units="metric">km/h</button>
+          <button data-units="imperial">mph</button>
+        </div>
+      </div>
+
+      <div class="srow">
+        <span>Language</span>
+        <div class="seg" id="langSeg">
+          <button data-lang="en">English</button>
+          <button data-lang="sv">Svenska</button>
+        </div>
+      </div>
+
+      <div class="srow col">
+        <span>Voice</span>
+        <select id="voiceSel"></select>
+        <button id="voiceTest" class="ghost">▶ Test voice</button>
+      </div>
+
+      <button id="settingsDone" class="primary">Done</button>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
