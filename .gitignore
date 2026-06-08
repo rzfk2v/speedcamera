@@ -1,0 +1,8 @@
+.DS_Store
+.claude/
+
+# Kept local only, not published (project/context notes)
+CLAUDE.md
+
+# Generated; the app uses app/cameras.json (which IS tracked)
+data/cameras.json

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0f14">
+<title>Nordic Speed Camera Alert</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Start overlay: needed to grant geolocation + unlock audio on a user gesture -->
+  <div id="startScreen" class="overlay">
+    <div class="start-card">
+      <h1>🎥 Nordic Speed&nbsp;Camera Alert</h1>
+      <p id="startInfo">Loading cameras…</p>
+      <button id="startBtn" disabled>START</button>
+      <p class="fineprint">Keeps the screen awake and speaks warnings.
+        Mount the phone and connect the car over Bluetooth audio. Drive safe — this is an aid, not a substitute for the speedometer.</p>
+    </div>
+  </div>
+
+  <!-- Driving HUD -->
+  <main id="hud" hidden>
+    <div id="alertCard" class="alert hidden">
+      <div class="alert-title">SPEED CAMERA</div>
+      <div class="alert-dist"><span id="alertDist">–</span> m</div>
+      <div class="alert-limit" id="alertLimit"></div>
+    </div>
+
+    <div id="speedBox">
+      <div id="speed">0</div>
+      <div class="unit">km/h</div>
+    </div>
+
+    <div id="statusLine">
+      <span id="camCount">–</span> cameras ·
+      <span id="gpsStatus">waiting for GPS…</span> ·
+      <span id="nextCam">no camera ahead</span>
+    </div>
+
+    <button id="muteBtn" class="ghost" title="Mute warnings">🔊</button>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

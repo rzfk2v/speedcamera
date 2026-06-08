@@ -1,0 +1,64 @@
+:root{
+  --bg:#0b0f14; --fg:#e8eef5; --muted:#7b8794;
+  --danger:#ff3b30; --warn:#ff9f0a;
+}
+*{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+/* The HTML hidden attribute must win over .overlay/#hud display rules below. */
+[hidden]{ display:none !important; }
+html,body{ height:100%; }
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  overflow:hidden; user-select:none;
+  transition:background .2s ease;
+}
+body.danger{ background:#3a0d0a; }
+
+/* Start overlay */
+.overlay{
+  position:fixed; inset:0; z-index:10;
+  display:flex; align-items:center; justify-content:center;
+  padding:24px; background:var(--bg);
+}
+.start-card{ text-align:center; max-width:440px; }
+.start-card h1{ font-size:27px; line-height:1.25; margin-bottom:18px; }
+#startInfo{ color:var(--muted); margin-bottom:26px; font-size:16px; }
+#startBtn{
+  font-size:28px; font-weight:800; letter-spacing:2px;
+  padding:18px 64px; border:none; border-radius:16px;
+  background:var(--warn); color:#000; cursor:pointer;
+}
+#startBtn:disabled{ opacity:.4; cursor:default; }
+.fineprint{ margin-top:26px; font-size:13px; line-height:1.5; color:var(--muted); }
+
+/* Driving HUD */
+#hud{
+  height:100%; position:relative;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;
+}
+#speedBox{ text-align:center; }
+#speed{ font-size:140px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+#speedBox .unit{ font-size:24px; color:var(--muted); margin-top:4px; }
+
+.alert{
+  width:min(92vw,520px); text-align:center; padding:22px 24px;
+  border-radius:24px; background:var(--danger); color:#fff;
+  box-shadow:0 0 60px rgba(255,59,48,.45);
+  animation:pop .18s ease;
+}
+@keyframes pop{ from{ transform:scale(.92); opacity:.4; } to{ transform:scale(1); opacity:1; } }
+.alert.hidden{ display:none; }
+.alert-title{ font-size:22px; font-weight:800; letter-spacing:3px; }
+.alert-dist{ font-size:84px; font-weight:800; line-height:1.15; font-variant-numeric:tabular-nums; }
+.alert-limit{ font-size:26px; font-weight:700; }
+.alert-limit:empty{ display:none; }
+
+#statusLine{
+  position:fixed; bottom:20px; left:0; right:0; padding:0 16px;
+  text-align:center; color:var(--muted); font-size:14px;
+}
+#muteBtn{ position:fixed; top:16px; right:16px; }
+.ghost{
+  background:rgba(255,255,255,.08); color:var(--fg);
+  border:none; border-radius:12px; padding:10px 14px; font-size:20px; cursor:pointer;
+}
