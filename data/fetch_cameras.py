@@ -97,6 +97,10 @@ def main():
         elif t == "relation" and tags.get("type") == "enforcement":
             enforcement_rels += 1
 
+    # Deterministic order: identical camera sets produce identical JSON regardless of
+    # Overpass response ordering, so update.sh only commits when cameras really change.
+    cameras.sort(key=lambda c: c["id"])
+
     out = {
         "source": "OpenStreetMap highway=speed_camera",
         "generated": time.strftime("%Y-%m-%d"),

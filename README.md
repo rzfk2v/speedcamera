@@ -19,7 +19,8 @@ Open the hosted URL in mobile Chrome → menu → **Install app** → grant Loca
 ## Develop
 
 ```bash
-python3 data/fetch_cameras.py                  # refresh camera data
+./data/update.sh                               # refresh data AND deploy (commit + push)
+python3 data/fetch_cameras.py                  # refresh data only, no deploy
 python3 -m http.server 8000 --directory app    # serve locally for testing
 ```
 
