@@ -22,6 +22,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Stamp build id into SW cache + version tag
+        run: |
+          SHORT="${GITHUB_SHA:0:7}"
+          sed -i -E "s/(const CACHE = 'speedcam-[^']*)'/\1-${SHORT}'/" app/sw.js
+          sed -i -E "s/(const APP_VERSION = '[^']*)'/\1+${SHORT}'/" app/app.js
+          echo "Stamped build $SHORT"
+          grep -nE "const CACHE|const APP_VERSION" app/sw.js app/app.js
       - name: Configure Pages (enables Pages on first run)
         uses: actions/configure-pages@v5
         with:

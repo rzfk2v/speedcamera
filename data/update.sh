@@ -21,7 +21,8 @@ verdict="$(python3 - "$REPO" "$REL" <<'PY'
 import json, subprocess, sys, hashlib
 repo, rel = sys.argv[1], sys.argv[2]
 def sig(text):
-    return hashlib.md5(json.dumps(json.loads(text)["cameras"], sort_keys=True).encode()).hexdigest()
+    d = json.loads(text)
+    return hashlib.md5(json.dumps([d["cameras"], d.get("zones", [])], sort_keys=True).encode()).hexdigest()
 new = sig(open(f"{repo}/{rel}").read())
 try:
     old = sig(subprocess.check_output(["git", "-C", repo, "show", f"HEAD:{rel}"], text=True))

@@ -36,17 +36,16 @@ OUT_PATHS = [
 
 def build_query(codes):
     areas = "\n".join(f'  area["ISO3166-1"="{c}"][admin_level=2];' for c in codes)
-    # Camera nodes plus a count of enforcement relations (avg-speed stretches).
-    # No geometry recursion — the MVP only needs the camera node coordinates.
+    # Camera nodes (out body) + enforcement relations with geometry (out geom), so we
+    # can derive average-speed ("section control") zone endpoints from the members.
     return f"""[out:json][timeout:300];
 (
 {areas}
 )->.a;
-(
-  node["highway"="speed_camera"](area.a);
-  relation["type"="enforcement"](area.a);
-);
+node["highway"="speed_camera"](area.a);
 out body;
+relation["type"="enforcement"](area.a);
+out geom;
 """
 
 
@@ -76,37 +75,84 @@ def fetch(query):
     raise SystemExit(f"All Overpass endpoints failed: {last_err}")
 
 
+def _farthest_pair(pts):
+    """Two points farthest apart (a section's endpoints)."""
+    best, bestd = (pts[0], pts[1]), -1.0
+    for i in range(len(pts)):
+        for j in range(i + 1, len(pts)):
+            dy, dx = pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]
+            d = dy * dy + dx * dx
+            if d > bestd:
+                bestd, best = d, (pts[i], pts[j])
+    return best
+
+
 def main():
     codes = [c.upper() for c in sys.argv[1:]] or DEFAULT_COUNTRIES
     print(f"Querying Overpass for: {', '.join(codes)}", file=sys.stderr)
     res = fetch(build_query(codes))
     elements = res.get("elements", [])
 
-    cameras = []
+    # Pass 1: enforcement relations -> average-speed zones, and collect the device-node
+    # ids to drop from the point list (the zone represents its entry/exit cameras).
+    zones = []
+    avg_device_ids = set()
     enforcement_rels = 0
     for el in elements:
-        t = el.get("type")
+        if el.get("type") != "relation":
+            continue
         tags = el.get("tags", {}) or {}
-        if t == "node" and tags.get("highway") == "speed_camera":
-            cam = {"id": el["id"], "lat": round(el["lat"], 6), "lon": round(el["lon"], 6)}
-            if "direction" in tags:
-                cam["dir"] = tags["direction"]
-            if "maxspeed" in tags:
-                cam["maxspeed"] = tags["maxspeed"]
-            cameras.append(cam)
-        elif t == "relation" and tags.get("type") == "enforcement":
-            enforcement_rels += 1
+        if tags.get("type") != "enforcement":
+            continue
+        enforcement_rels += 1
+        if tags.get("enforcement") != "average_speed":
+            continue
+        candidates = []   # endpoint candidates: way ends + device nodes
+        for m in el.get("members", []) or []:
+            if m.get("type") == "node" and "lat" in m:
+                candidates.append((m["lat"], m["lon"]))
+                if m.get("role") == "device":
+                    avg_device_ids.add(m["ref"])
+            elif m.get("type") == "way" and m.get("geometry"):
+                g = m["geometry"]
+                candidates.append((g[0]["lat"], g[0]["lon"]))
+                candidates.append((g[-1]["lat"], g[-1]["lon"]))
+        if len(candidates) < 2:
+            continue
+        a, b = _farthest_pair(candidates)
+        zone = {"id": el["id"],
+                "a": [round(a[0], 6), round(a[1], 6)],
+                "b": [round(b[0], 6), round(b[1], 6)]}
+        if "maxspeed" in tags:
+            zone["maxspeed"] = tags["maxspeed"]
+        zones.append(zone)
 
-    # Deterministic order: identical camera sets produce identical JSON regardless of
-    # Overpass response ordering, so update.sh only commits when cameras really change.
+    # Pass 2: point cameras (excluding average-speed zone device nodes).
+    cameras = []
+    for el in elements:
+        if el.get("type") != "node":
+            continue
+        tags = el.get("tags", {}) or {}
+        if tags.get("highway") != "speed_camera" or el["id"] in avg_device_ids:
+            continue
+        cam = {"id": el["id"], "lat": round(el["lat"], 6), "lon": round(el["lon"], 6)}
+        if "direction" in tags:
+            cam["dir"] = tags["direction"]
+        if "maxspeed" in tags:
+            cam["maxspeed"] = tags["maxspeed"]
+        cameras.append(cam)
+
+    # Deterministic order so update.sh only commits when the data really changes.
     cameras.sort(key=lambda c: c["id"])
+    zones.sort(key=lambda z: z["id"])
 
     out = {
-        "source": "OpenStreetMap highway=speed_camera",
+        "source": "OpenStreetMap highway=speed_camera + enforcement=average_speed",
         "generated": time.strftime("%Y-%m-%d"),
         "countries": codes,
         "count": len(cameras),
         "cameras": cameras,
+        "zones": zones,
     }
     payload = json.dumps(out, separators=(",", ":"))
     for p in OUT_PATHS:
@@ -116,6 +162,7 @@ def main():
 
     size_kb = len(payload.encode()) / 1024
     print(f"\n  cameras (highway=speed_camera): {len(cameras)}", file=sys.stderr)
+    print(f"  average-speed zones:            {len(zones)}", file=sys.stderr)
     print(f"  enforcement relations seen:     {enforcement_rels}", file=sys.stderr)
     print(f"  with direction tag:             {sum('dir' in c for c in cameras)}", file=sys.stderr)
     print(f"  with maxspeed tag:              {sum('maxspeed' in c for c in cameras)}", file=sys.stderr)

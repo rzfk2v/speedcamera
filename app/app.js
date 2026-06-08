@@ -2,7 +2,7 @@
 
 /* Nordic Speed Camera Alert — standalone PWA.
    Foreground geolocation -> directional proximity detection -> spoken + visual warning.
-   Camera data: OSM highway=speed_camera, bundled as cameras.json (see ../data). */
+   Data: OSM highway=speed_camera (points) + enforcement=average_speed (zones). */
 
 const CONFIG = {
   searchRadius: 1200,  // m — only consider cameras within this range
@@ -12,15 +12,16 @@ const CONFIG = {
   nearDist: 180,       // m — second, closer chime + red flash
   aheadCone: 55,       // deg — camera must be within this of heading to count as "ahead"
   dirTolerance: 70,    // deg — camera's enforced direction must match heading within this
-  passClear: 1.6,      // clear a camera once distance > warnDist * this (we've passed it)
+  passClear: 1.6,      // clear once distance > warnDist * this (we've passed it)
   minMoveSpeed: 1.5,   // m/s (~5 km/h) — below this we don't warn (parked / crawling)
   poorAccuracy: 100,   // m — above this the fix is too coarse to warn on (shows a banner)
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.6';
+const APP_VERSION = 'v0.7';
 
 let CAMERAS = [];
+let ZONES = [];
 let muted = false;
 let radarOn = localStorage.getItem('radarOn') !== '0';   // default ON
 let units = localStorage.getItem('units') || 'metric';   // 'metric' | 'imperial'
@@ -71,6 +72,12 @@ function cameraPhrase(limitKmh){
   if (lang === 'sv') return n ? `Fartkamera, ${n}` : 'Fartkamera';
   return n ? `Speed camera ahead, limit ${n}` : 'Speed camera ahead';
 }
+function zonePhrase(limitKmh){
+  const n = limitKmh ? limitNum(limitKmh) : null;
+  if (lang === 'sv') return n ? `Medelhastighetskontroll, ${n}` : 'Medelhastighetskontroll';
+  return n ? `Average speed zone, limit ${n}` : 'Average speed zone';
+}
+function zoneEndPhrase(){ return lang === 'sv' ? 'Slut på medelhastighetskontroll' : 'End of average speed zone'; }
 function pickVoice(){
   const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
   if (voiceName){ const v = vs.find(v => v.name === voiceName); if (v) return v; }
@@ -86,6 +93,12 @@ function loadCameras(){
       id: c.id, lat: c.lat, lon: c.lon,
       dir: c.dir != null ? parseFloat(c.dir) : null,
       limit: c.maxspeed != null ? parseInt(c.maxspeed, 10) : null,
+    }));
+    ZONES = (d.zones || []).map(z => ({
+      id: z.id,
+      a: { lat: z.a[0], lon: z.a[1] },
+      b: { lat: z.b[0], lon: z.b[1] },
+      limit: z.maxspeed != null ? parseInt(z.maxspeed, 10) : null,
     }));
     return d;
   });
@@ -104,6 +117,32 @@ function nearestAhead(lat, lon, heading){
     best = cam; bestD = d;
   }
   if (best) best._d = bestD;
+  return best;
+}
+
+// The relevant average-speed-zone event ahead: 'start' if we're approaching an entry
+// while heading into the zone, or 'end' if we're inside and approaching the exit.
+function nearestZoneEvent(lat, lon, heading){
+  if (heading == null) return null;
+  let best = null, bestD = Infinity;
+  for (const z of ZONES){
+    const dirAB = bearing(z.a.lat, z.a.lon, z.b.lat, z.b.lon);
+    let entry, exit;
+    if (angleDiff(heading, dirAB) <= CONFIG.dirTolerance){ entry = z.a; exit = z.b; }
+    else if (angleDiff(heading, (dirAB + 180) % 360) <= CONFIG.dirTolerance){ entry = z.b; exit = z.a; }
+    else continue;  // not travelling along this zone
+    const dE = haversine(lat, lon, entry.lat, entry.lon);
+    const dX = haversine(lat, lon, exit.lat, exit.lon);
+    const entryAhead = angleDiff(heading, bearing(lat, lon, entry.lat, entry.lon)) <= CONFIG.aheadCone;
+    const exitAhead  = angleDiff(heading, bearing(lat, lon, exit.lat, exit.lon))  <= CONFIG.aheadCone;
+    if (entryAhead && dE <= CONFIG.searchRadius && dE < bestD){
+      best = { type:'zone', kind:'start', id:'zs' + z.id, dist:dE, limit:z.limit, title:'AVG SPEED ZONE' };
+      bestD = dE;
+    } else if (!entryAhead && exitAhead && dX <= CONFIG.searchRadius && dX < bestD){
+      best = { type:'zone', kind:'end', id:'ze' + z.id, dist:dX, limit:null, title:'ZONE END' };
+      bestD = dX;
+    }
+  }
   return best;
 }
 
@@ -133,31 +172,40 @@ function onPosition(pos){
 
   const accurate = acc != null && acc <= CONFIG.poorAccuracy;
   const reliable = accurate && heading != null && speed >= CONFIG.minMoveSpeed;
-  const target = reliable ? nearestAhead(lat, lon, heading) : null;
-  handleWarning(target, speed);
-  updateNextCamUI(target);
+  let active = null;
+  if (reliable){
+    const cam = nearestAhead(lat, lon, heading);
+    const ze = nearestZoneEvent(lat, lon, heading);
+    if (cam && (!ze || cam._d <= ze.dist))
+      active = { type:'cam', id:'c' + cam.id, dist:cam._d, limit:cam.limit, title:'SPEED CAMERA' };
+    else if (ze) active = ze;
+  }
+  handleAlert(active, speed);
+  updateNextCamUI(active);
 }
 
-function handleWarning(target, speed){
-  if (!target){ clearAlertUI(); warnState.id = null; warnState.stage = 0; return; }
+function handleAlert(active, speed){
+  if (!active){ clearAlertUI(); warnState.id = null; warnState.stage = 0; return; }
 
-  const d = target._d;
-  const wd = warnDistFor(speed);
-
-  if (warnState.id !== target.id){ warnState.id = target.id; warnState.stage = 0; }
-
+  const d = active.dist, wd = warnDistFor(speed);
+  if (warnState.id !== active.id){ warnState.id = active.id; warnState.stage = 0; }
   if (d > wd * CONFIG.passClear){ clearAlertUI(); warnState.stage = 0; return; }
 
-  showAlertUI(target, d);
+  showAlertUI(active, d);
 
   if (warnState.stage < 1 && d <= wd){
     warnState.stage = 1;
-    beep(0.12, 880);
-    speakCamera(target);
+    beep(0.12, active.type === 'zone' ? 660 : 880);
+    announce(active);
   } else if (warnState.stage < 2 && d <= CONFIG.nearDist){
     warnState.stage = 2;
     beep(0.22, 1320);
   }
+}
+function announce(active){
+  if (active.type === 'cam') speak(cameraPhrase(active.limit));
+  else if (active.kind === 'start') speak(zonePhrase(active.limit));
+  else speak(zoneEndPhrase());
 }
 
 // ---------- audio ----------
@@ -188,7 +236,6 @@ function speak(text){
   speechSynthesis.cancel();
   speechSynthesis.speak(utter(text));
 }
-function speakCamera(cam){ speak(cameraPhrase(cam.limit)); }
 
 // ---------- UI ----------
 const $ = id => document.getElementById(id);
@@ -197,8 +244,10 @@ function updateSpeedUI(speed, acc){
   $('speedUnit').textContent = speedUnit();
   $('gpsStatus').textContent = acc != null ? `GPS ±${distLabel(acc)}` : 'waiting for GPS…';
 }
-function updateNextCamUI(target){
-  $('nextCam').textContent = target ? `camera ${distLabel(target._d)} ahead` : 'no camera ahead';
+function updateNextCamUI(active){
+  if (!active){ $('nextCam').textContent = 'no camera ahead'; return; }
+  const what = active.type === 'zone' ? 'avg-speed zone' : 'camera';
+  $('nextCam').textContent = `${what} ${distLabel(active.dist)} ahead`;
 }
 function updateGpsBanner(acc){
   const b = $('gpsBanner');
@@ -260,10 +309,11 @@ function drawRadar(lat, lon, heading){
 function applyRadar(){
   $('radar').classList.toggle('hidden', !radarOn);
 }
-function showAlertUI(cam, d){
+function showAlertUI(active, d){
   $('alertCard').classList.remove('hidden');
+  $('alertTitle').textContent = active.title;
   $('alertDist').textContent = distLabel(d);
-  $('alertLimit').textContent = cam.limit ? `limit ${limitNum(cam.limit)} ${speedUnit()}` : '';
+  $('alertLimit').textContent = active.limit ? `limit ${limitNum(active.limit)} ${speedUnit()}` : '';
   document.body.classList.toggle('danger', d <= CONFIG.nearDist);
 }
 function clearAlertUI(){
@@ -318,7 +368,7 @@ function init(){
   $('speedUnit').textContent = speedUnit();
   loadCameras().then(d => {
     $('camCount').textContent = d.count;
-    $('startInfo').textContent = `${d.count} cameras loaded · OSM ${d.generated} · ${APP_VERSION}`;
+    $('startInfo').textContent = `${d.count} cameras · ${(d.zones || []).length} zones · OSM ${d.generated} · ${APP_VERSION}`;
     $('startBtn').disabled = false;
   }).catch(e => { $('startInfo').textContent = 'Failed to load cameras: ' + e; });
 
@@ -328,13 +378,6 @@ function init(){
     $('muteBtn').textContent = muted ? '🔇' : '🔊';
     if (muted && 'speechSynthesis' in window) speechSynthesis.cancel();
   });
-  $('radarSeg').addEventListener('click', e => {
-    const r = e.target.dataset.radar; if (!r) return;
-    radarOn = (r === 'on');
-    localStorage.setItem('radarOn', radarOn ? '1' : '0');
-    syncSegs(); applyRadar();
-  });
-  applyRadar();
 
   // settings menu
   $('menuBtn').addEventListener('click', openSettings);
@@ -348,12 +391,19 @@ function init(){
     const l = e.target.dataset.lang; if (!l) return;
     lang = l; localStorage.setItem('lang', l); syncSegs(); populateVoices();
   });
+  $('radarSeg').addEventListener('click', e => {
+    const r = e.target.dataset.radar; if (!r) return;
+    radarOn = (r === 'on');
+    localStorage.setItem('radarOn', radarOn ? '1' : '0');
+    syncSegs(); applyRadar();
+  });
   $('voiceSel').addEventListener('change', e => { voiceName = e.target.value; localStorage.setItem('voice', voiceName); });
   $('voiceTest').addEventListener('click', () => {
     if ('speechSynthesis' in window){ speechSynthesis.cancel(); speechSynthesis.speak(utter(cameraPhrase(60))); }
   });
   if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { if (!$('settings').hidden) populateVoices(); };
 
+  applyRadar();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 init();
