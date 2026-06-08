@@ -18,7 +18,7 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.3';
+const APP_VERSION = 'v0.4';
 
 let CAMERAS = [];
 let muted = false;

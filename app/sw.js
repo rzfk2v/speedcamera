@@ -1,8 +1,9 @@
 /* Offline cache so the app works with no signal. Bump CACHE to force an update. */
-const CACHE = 'speedcam-v0.3';
+const CACHE = 'speedcam-v0.4';
 const ASSETS = [
   './', './index.html', './app.js', './style.css',
   './manifest.webmanifest', './icon.svg', './cameras.json',
+  './icon-180.png', './icon-192.png', './icon-512.png',
 ];
 
 self.addEventListener('install', e => {
