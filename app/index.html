@@ -52,6 +52,7 @@
       <span id="camCount">–</span> cameras ·
       <span id="gpsStatus">waiting for GPS…</span> ·
       <span id="nextCam">no camera ahead</span>
+      <div id="diag"></div>
     </div>
 
     <button id="muteBtn" class="ghost" title="Mute warnings">🔊</button>
@@ -84,6 +85,14 @@
         <div class="seg" id="radarSeg">
           <button data-radar="on">On</button>
           <button data-radar="off">Off</button>
+        </div>
+      </div>
+
+      <div class="srow">
+        <span>Diagnostics</span>
+        <div class="seg" id="diagSeg">
+          <button data-diag="on">On</button>
+          <button data-diag="off">Off</button>
         </div>
       </div>
 

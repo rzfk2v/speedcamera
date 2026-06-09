@@ -19,12 +19,13 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.8';
+const APP_VERSION = 'v0.9';
 
 let CAMERAS = [];
 let ZONES = [];
 let muted = false;
 let radarOn = localStorage.getItem('radarOn') !== '0';   // default ON
+let diagOn = localStorage.getItem('diag') !== '0';       // diagnostics line, default ON
 let units = localStorage.getItem('units') || 'metric';   // 'metric' | 'imperial'
 let lang  = localStorage.getItem('lang')  || 'en';       // 'en' | 'sv'
 let voiceName = localStorage.getItem('voice') || '';     // '' = auto
@@ -183,6 +184,26 @@ function onPosition(pos){
   }
   handleAlert(active, speed);
   updateNextCamUI(active);
+  $('diag').textContent = diagOn ? diagnose(lat, lon, heading, speed, acc, active) : '';
+}
+
+// Explain why the nearest point camera is NOT producing a spoken warning (field debugging).
+function diagnose(lat, lon, heading, speed, acc, active){
+  if (active) return '';   // something IS warning — the alert card shows it
+  let nd = Infinity, nc = null;
+  for (const cam of CAMERAS){
+    const d = haversine(lat, lon, cam.lat, cam.lon);
+    if (d < nd){ nd = d; nc = cam; }
+  }
+  if (!nc || nd > CONFIG.searchRadius) return '';   // nothing close enough to explain
+  const pre = `nearest cam ${distLabel(nd)} — `;
+  if (acc == null) return pre + 'acquiring GPS';
+  if (acc > CONFIG.poorAccuracy) return pre + `GPS ±${distLabel(acc)} (paused)`;
+  if (speed < CONFIG.minMoveSpeed) return pre + 'too slow/stopped';
+  if (heading == null) return pre + 'no heading yet';
+  if (angleDiff(heading, bearing(lat, lon, nc.lat, nc.lon)) > CONFIG.aheadCone) return pre + 'behind/beside you';
+  if (nc.dir != null && angleDiff(heading, nc.dir) > CONFIG.dirTolerance) return pre + 'enforces other direction';
+  return pre + 'in range';
 }
 
 function handleAlert(active, speed){
@@ -327,6 +348,7 @@ function syncSegs(){
   document.querySelectorAll('#unitSeg button').forEach(b => b.classList.toggle('on', b.dataset.units === units));
   document.querySelectorAll('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
   document.querySelectorAll('#radarSeg button').forEach(b => b.classList.toggle('on', (b.dataset.radar === 'on') === radarOn));
+  document.querySelectorAll('#diagSeg button').forEach(b => b.classList.toggle('on', (b.dataset.diag === 'on') === diagOn));
 }
 function populateVoices(){
   const sel = $('voiceSel'); if (!sel) return;
@@ -397,6 +419,12 @@ function init(){
     radarOn = (r === 'on');
     localStorage.setItem('radarOn', radarOn ? '1' : '0');
     syncSegs(); applyRadar();
+  });
+  $('diagSeg').addEventListener('click', e => {
+    const x = e.target.dataset.diag; if (!x) return;
+    diagOn = (x === 'on');
+    localStorage.setItem('diag', diagOn ? '1' : '0');
+    syncSegs(); if (!diagOn) $('diag').textContent = '';
   });
   $('voiceSel').addEventListener('change', e => { voiceName = e.target.value; localStorage.setItem('voice', voiceName); });
   $('voiceTest').addEventListener('click', () => {

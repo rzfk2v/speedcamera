@@ -58,6 +58,8 @@ body.danger{ background:#3a0d0a; }
   position:fixed; bottom:20px; left:0; right:0; padding:0 16px;
   text-align:center; color:var(--muted); font-size:14px;
 }
+#diag{ margin-top:4px; font-size:13px; color:var(--warn); }
+#diag:empty{ display:none; }
 #menuBtn{ position:fixed; top:16px; right:16px; }
 #muteBtn{ position:fixed; top:16px; right:72px; }
 
