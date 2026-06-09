@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch Nordic speed cameras from OpenStreetMap via the Overpass API.
+"""Fetch European speed cameras from OpenStreetMap via the Overpass API.
 
 Source of truth: OSM nodes tagged ``highway=speed_camera``. Also pulls
 ``type=enforcement`` relations so average-speed ("section control") stretches
@@ -23,7 +23,7 @@ OVERPASS_ENDPOINTS = [
 ]
 
 # Nordic countries by ISO 3166-1 alpha-2.
-DEFAULT_COUNTRIES = ["SE", "NO", "DK", "FI", "IS"]
+DEFAULT_COUNTRIES = ["SE", "NO", "DK", "FI", "IS", "IT"]
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # Canonical copy lives next to this script; a second copy is written into the app

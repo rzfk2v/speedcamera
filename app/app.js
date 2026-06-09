@@ -1,6 +1,6 @@
 'use strict';
 
-/* Nordic Speed Camera Alert — standalone PWA.
+/* Speed Camera Alert — standalone PWA.
    Foreground geolocation -> directional proximity detection -> spoken + visual warning.
    Data: OSM highway=speed_camera (points) + enforcement=average_speed (zones). */
 
@@ -19,7 +19,7 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.10';
+const APP_VERSION = 'v0.11';
 
 let CAMERAS = [];
 let ZONES = [];

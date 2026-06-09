@@ -1,7 +1,7 @@
 {
-  "name": "Nordic Speed Camera Alert",
+  "name": "Speed Camera Alert",
   "short_name": "SpeedCam",
-  "description": "Offline speed-camera proximity warnings for the Nordics, using OpenStreetMap data.",
+  "description": "Offline speed-camera proximity warnings using OpenStreetMap data.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
