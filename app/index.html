@@ -59,6 +59,8 @@
     <button id="menuBtn" class="ghost" title="Settings">☰</button>
   </main>
 
+  <button id="updateChip" hidden>🔄 Update ready — tap to reload</button>
+
   <!-- Settings sheet -->
   <div id="settings" class="overlay" hidden>
     <div class="sheet">
@@ -100,6 +102,11 @@
         <span>Voice</span>
         <select id="voiceSel"></select>
         <button id="voiceTest" class="ghost">▶ Test voice</button>
+      </div>
+
+      <div class="srow col">
+        <span>Trouble getting the latest version?</span>
+        <button id="forceRefresh" class="ghost">Force refresh (clear cache &amp; reload)</button>
       </div>
 
       <button id="settingsDone" class="primary">Done</button>

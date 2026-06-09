@@ -19,7 +19,7 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.9';
+const APP_VERSION = 'v0.10';
 
 let CAMERAS = [];
 let ZONES = [];
@@ -370,8 +370,45 @@ async function requestWakeLock(){
   }catch(e){ /* not fatal */ }
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') requestWakeLock();
+  if (document.visibilityState === 'visible'){ requestWakeLock(); checkForUpdate(); }
 });
+
+// ---------- service worker + update flow ----------
+let swReg = null, lastUpdateCheck = 0;
+function showUpdateChip(){ const c = $('updateChip'); if (c) c.hidden = false; }
+function checkForUpdate(){
+  if (!swReg) return;
+  if (Date.now() - lastUpdateCheck < 60000) return;   // throttle to ~1/min
+  lastUpdateCheck = Date.now();
+  swReg.update().catch(() => {});
+}
+function registerSW(){
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    swReg = reg; lastUpdateCheck = Date.now();
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdateChip();   // update already staged
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing; if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        // installed + an existing controller = a fresh version (not the first install)
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateChip();
+      });
+    });
+  }).catch(() => {});
+}
+async function forceRefresh(){
+  try{
+    if (navigator.serviceWorker){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches){
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k)));
+    }
+  }catch(e){ /* ignore */ }
+  location.reload();
+}
 
 function start(){
   $('startScreen').hidden = true;
@@ -433,7 +470,9 @@ function init(){
   if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { if (!$('settings').hidden) populateVoices(); };
 
   applyRadar();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  $('updateChip').addEventListener('click', () => location.reload());
+  $('forceRefresh').addEventListener('click', forceRefresh);
+  registerSW();
 }
 init();
 

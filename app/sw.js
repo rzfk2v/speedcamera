@@ -1,5 +1,5 @@
 /* Offline cache so the app works with no signal. Bump CACHE to force an update. */
-const CACHE = 'speedcam-v0.9';
+const CACHE = 'speedcam-v0.10';
 const ASSETS = [
   './', './index.html', './app.js', './style.css',
   './manifest.webmanifest', './icon.svg', './cameras.json',
@@ -7,7 +7,14 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // Fetch each asset bypassing the HTTP cache, so the new cache never absorbs a
+  // GitHub-Pages-stale (max-age 600) copy.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.all(ASSETS.map(u =>
+        fetch(new Request(u, { cache: 'reload' })).then(r => c.put(u, r)))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {

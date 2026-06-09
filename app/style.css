@@ -92,6 +92,13 @@ body.danger{ background:#3a0d0a; }
   width:100%; margin-top:22px; padding:15px; font-size:18px; font-weight:700;
   border:none; border-radius:14px; background:var(--warn); color:#000; cursor:pointer;
 }
+#updateChip{
+  position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:20;
+  border:none; border-radius:999px; padding:12px 20px; cursor:pointer;
+  background:#2ec36b; color:#04130a; font-size:15px; font-weight:700;
+  box-shadow:0 6px 24px rgba(0,0,0,.45);
+}
+#forceRefresh{ width:100%; font-size:15px; }
 .ghost{
   background:rgba(255,255,255,.08); color:var(--fg);
   border:none; border-radius:12px; padding:10px 14px; font-size:20px; cursor:pointer;
