@@ -14,11 +14,12 @@ const CONFIG = {
   dirTolerance: 70,    // deg — camera's enforced direction must match heading within this
   passClear: 1.6,      // clear once distance > warnDist * this (we've passed it)
   minMoveSpeed: 1.5,   // m/s (~5 km/h) — below this we don't warn (parked / crawling)
-  poorAccuracy: 100,   // m — above this the fix is too coarse to warn on (shows a banner)
+  poorAccuracy: 250,   // m — warnings paused + banner above this (coarse/approximate fix;
+                       // 100 m was too strict — it muted real warnings on normal driving GPS jitter)
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.7';
+const APP_VERSION = 'v0.8';
 
 let CAMERAS = [];
 let ZONES = [];
