@@ -1,5 +1,5 @@
 /* Offline cache so the app works with no signal. Bump CACHE to force an update. */
-const CACHE = 'speedcam-v0.11';
+const CACHE = 'speedcam-v0.12';
 const ASSETS = [
   './', './index.html', './app.js', './style.css',
   './manifest.webmanifest', './icon.svg', './cameras.json',

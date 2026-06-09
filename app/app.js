@@ -19,7 +19,7 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.11';
+const APP_VERSION = 'v0.12';
 
 let CAMERAS = [];
 let ZONES = [];
@@ -170,7 +170,7 @@ function onPosition(pos){
   const acc = c.accuracy;
   updateSpeedUI(speed, acc);
   updateGpsBanner(acc);
-  drawRadar(lat, lon, heading);
+  updateRadar(lat, lon, heading);
 
   const accurate = acc != null && acc <= CONFIG.poorAccuracy;
   const reliable = accurate && heading != null && speed >= CONFIG.minMoveSpeed;
@@ -285,51 +285,141 @@ function updateGpsBanner(acc){
 }
 
 const radarRings = [250, 500, 1000]; // metres
-function drawRadar(lat, lon, heading){
+
+// Camera blips are recomputed per GPS tick (not per frame); the rAF loop only
+// animates the sweep/pulse + redraws the cached blips. Keeps per-frame work tiny.
+let radarFix = null;        // { heading: number|null }
+let radarDots = [];         // [{ rr:0..1, ang:rad (0 = up = heading), ahead:bool }]
+let radarNearest = null;    // nearest "ahead" blip (gets the pulse)
+let radarRAF = 0, radarLastDraw = 0;
+
+function updateRadar(lat, lon, heading){
+  radarFix = { heading };
+  radarDots = []; radarNearest = null;
+  const maxM = CONFIG.radarRange, hd = heading == null ? 0 : heading;
+  let nd = Infinity;
+  for (const cam of CAMERAS){
+    const d = haversine(lat, lon, cam.lat, cam.lon);
+    if (d > maxM) continue;
+    const b = bearing(lat, lon, cam.lat, cam.lon);
+    const ahead = heading != null && angleDiff(hd, b) <= CONFIG.aheadCone &&
+                  (cam.dir == null || angleDiff(hd, cam.dir) <= CONFIG.dirTolerance);
+    const dot = { rr: d / maxM, ang: toRad((b - hd + 360) % 360), ahead };
+    radarDots.push(dot);
+    if (ahead && d < nd){ nd = d; radarNearest = dot; }
+  }
+  ensureRadarLoop();
+}
+
+function drawRadar(ts){
   const cv = $('radar'); if (!cv || cv.classList.contains('hidden')) return;
   const ctx = cv.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const px = Math.round((cv.clientWidth || 300) * dpr);
   if (cv.width !== px){ cv.width = px; cv.height = px; }
-  const S = cv.width, cx = S / 2, cy = S / 2, R = (S / 2) * 0.92;
-  const maxM = CONFIG.radarRange;
+  const S = cv.width, cx = S / 2, cy = S / 2, R = (S / 2) * 0.94;
+  const pos = (ang, r) => [cx + r * Math.sin(ang), cy - r * Math.cos(ang)]; // ang 0 = up
   ctx.clearRect(0, 0, S, S);
 
-  // range rings + labels
-  ctx.font = `${12 * dpr}px -apple-system, system-ui, sans-serif`;
+  // backdrop glow
+  let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  g.addColorStop(0, 'rgba(46,80,104,0.30)');
+  g.addColorStop(0.72, 'rgba(18,28,38,0.10)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+
+  // forward detection cone (±aheadCone)
+  const cone = toRad(CONFIG.aheadCone);
+  g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  g.addColorStop(0, 'rgba(77,163,255,0.20)');
+  g.addColorStop(1, 'rgba(77,163,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, -Math.PI/2 - cone, -Math.PI/2 + cone); ctx.closePath(); ctx.fill();
+
+  // rotating sweep with a fading trail
+  const sweep = (ts % 4000) / 4000 * Math.PI * 2;     // one turn / 4 s
+  const trail = toRad(80);
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, sweep - Math.PI/2 - trail, sweep - Math.PI/2); ctx.closePath();
+  g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  g.addColorStop(0, 'rgba(90,210,170,0)');
+  g.addColorStop(1, 'rgba(90,210,170,0.16)');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(130,235,190,0.55)'; ctx.lineWidth = 1.5 * dpr;
+  let p = pos(sweep, R);
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]); ctx.stroke();
+
+  // range rings + labels, then the outer ring
+  ctx.font = `${11 * dpr}px -apple-system, system-ui, sans-serif`;
   for (const m of radarRings){
-    if (m > maxM) continue;
-    const rr = R * (m / maxM);
-    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = dpr;
+    if (m > CONFIG.radarRange) continue;
+    const rr = R * (m / CONFIG.radarRange);
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = dpr;
     ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.30)';
-    ctx.fillText(distLabel(m), cx + 4 * dpr, cy - rr + 15 * dpr);
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.fillText(distLabel(m), cx + 5 * dpr, cy - rr + 14 * dpr);
+  }
+  ctx.strokeStyle = 'rgba(120,200,230,0.22)'; ctx.lineWidth = 1.5 * dpr;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+
+  // north indicator (heading-up: N sits at relative bearing -heading)
+  if (radarFix && radarFix.heading != null){
+    const np = pos(toRad((360 - radarFix.heading) % 360), R - 9 * dpr);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${12 * dpr}px -apple-system, system-ui, sans-serif`;
+    ctx.fillText('N', np[0], np[1]);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   }
 
-  const hd = (heading == null) ? 0 : heading;   // heading-up (north-up if heading unknown)
-  for (const cam of CAMERAS){
-    const d = haversine(lat, lon, cam.lat, cam.lon);
-    if (d > maxM) continue;
-    const b = bearing(lat, lon, cam.lat, cam.lon);
-    const rel = toRad((b - hd + 360) % 360);
-    const rr = R * (d / maxM);
-    const x = cx + rr * Math.sin(rel), y = cy - rr * Math.cos(rel);
-    const ahead = heading != null && angleDiff(hd, b) <= CONFIG.aheadCone &&
-                  (cam.dir == null || angleDiff(hd, cam.dir) <= CONFIG.dirTolerance);
-    ctx.beginPath();
-    ctx.arc(x, y, (ahead ? 5 : 3.5) * dpr, 0, Math.PI * 2);
-    ctx.fillStyle = ahead ? '#ff453a' : 'rgba(255,255,255,.32)';
-    ctx.fill();
+  // camera blips
+  for (const dot of radarDots){
+    const [x, y] = pos(dot.ang, R * dot.rr);
+    if (dot.ahead){
+      ctx.save(); ctx.shadowColor = '#ff453a'; ctx.shadowBlur = 9 * dpr;
+      ctx.fillStyle = '#ff453a';
+      ctx.beginPath(); ctx.arc(x, y, 4.5 * dpr, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.32)';
+      ctx.beginPath(); ctx.arc(x, y, 3 * dpr, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
-  // "you" marker — arrow pointing up (your direction of travel)
-  ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = '#4da3ff';
+  // pulse ring on the nearest camera ahead
+  if (radarNearest){
+    const [x, y] = pos(radarNearest.ang, R * radarNearest.rr);
+    const ph = (ts % 1600) / 1600;
+    ctx.strokeStyle = `rgba(255,69,58,${(1 - ph) * 0.55})`; ctx.lineWidth = 2 * dpr;
+    ctx.beginPath(); ctx.arc(x, y, (5 + ph * 13) * dpr, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // "you" marker — glowing chevron pointing up
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.shadowColor = '#4da3ff'; ctx.shadowBlur = 8 * dpr; ctx.fillStyle = '#5bb0ff';
   ctx.beginPath();
-  ctx.moveTo(0, -11 * dpr); ctx.lineTo(8 * dpr, 9 * dpr); ctx.lineTo(0, 5 * dpr); ctx.lineTo(-8 * dpr, 9 * dpr);
+  ctx.moveTo(0, -12 * dpr); ctx.lineTo(8.5 * dpr, 9 * dpr); ctx.lineTo(0, 4.5 * dpr); ctx.lineTo(-8.5 * dpr, 9 * dpr);
   ctx.closePath(); ctx.fill(); ctx.restore();
 }
+
+function ensureRadarLoop(){
+  if (!radarOn || $('hud').hidden || radarRAF) return;
+  const loop = (ts) => {
+    radarRAF = requestAnimationFrame(loop);
+    if (ts - radarLastDraw < 33) return;   // throttle to ~30 fps
+    radarLastDraw = ts; drawRadar(ts);
+  };
+  radarRAF = requestAnimationFrame(loop);
+}
+function stopRadarLoop(){
+  if (radarRAF){ cancelAnimationFrame(radarRAF); radarRAF = 0; }
+  const cv = $('radar'); if (cv){ const c = cv.getContext('2d'); if (c) c.clearRect(0, 0, cv.width, cv.height); }
+}
 function applyRadar(){
-  $('radar').classList.toggle('hidden', !radarOn);
+  const hidden = !radarOn;
+  $('radar').classList.toggle('hidden', hidden);
+  if (hidden) stopRadarLoop(); else ensureRadarLoop();
 }
 function showAlertUI(active, d){
   $('alertCard').classList.remove('hidden');
@@ -370,7 +460,7 @@ async function requestWakeLock(){
   }catch(e){ /* not fatal */ }
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible'){ requestWakeLock(); checkForUpdate(); }
+  if (document.visibilityState === 'visible'){ requestWakeLock(); checkForUpdate(); ensureRadarLoop(); }
 });
 
 // ---------- service worker + update flow ----------
@@ -413,6 +503,7 @@ async function forceRefresh(){
 function start(){
   $('startScreen').hidden = true;
   $('hud').hidden = false;
+  ensureRadarLoop();       // animate the scope immediately (even before the first GPS fix)
   updateGpsBanner(null);   // show "Acquiring GPS…" until the first fix arrives
   beep(0.001, 440);   // unlock WebAudio on the user gesture
   speak(' ');         // prime speechSynthesis
