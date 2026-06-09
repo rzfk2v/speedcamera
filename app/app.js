@@ -19,13 +19,14 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.12';
+const APP_VERSION = 'v0.13';
 
 let CAMERAS = [];
 let ZONES = [];
 let muted = false;
 let radarOn = localStorage.getItem('radarOn') !== '0';   // default ON
 let diagOn = localStorage.getItem('diag') !== '0';       // diagnostics line, default ON
+let animOn = localStorage.getItem('anim') !== '0';       // radar animation (sweep/pulse), default ON
 let units = localStorage.getItem('units') || 'metric';   // 'metric' | 'imperial'
 let lang  = localStorage.getItem('lang')  || 'en';       // 'en' | 'sv'
 let voiceName = localStorage.getItem('voice') || '';     // '' = auto
@@ -308,7 +309,7 @@ function updateRadar(lat, lon, heading){
     radarDots.push(dot);
     if (ahead && d < nd){ nd = d; radarNearest = dot; }
   }
-  ensureRadarLoop();
+  if (animOn) ensureRadarLoop(); else drawRadar(performance.now());
 }
 
 function drawRadar(ts){
@@ -337,18 +338,20 @@ function drawRadar(ts){
   ctx.beginPath(); ctx.moveTo(cx, cy);
   ctx.arc(cx, cy, R, -Math.PI/2 - cone, -Math.PI/2 + cone); ctx.closePath(); ctx.fill();
 
-  // rotating sweep with a fading trail
-  const sweep = (ts % 4000) / 4000 * Math.PI * 2;     // one turn / 4 s
-  const trail = toRad(80);
-  ctx.beginPath(); ctx.moveTo(cx, cy);
-  ctx.arc(cx, cy, R, sweep - Math.PI/2 - trail, sweep - Math.PI/2); ctx.closePath();
-  g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-  g.addColorStop(0, 'rgba(90,210,170,0)');
-  g.addColorStop(1, 'rgba(90,210,170,0.16)');
-  ctx.fillStyle = g; ctx.fill();
-  ctx.strokeStyle = 'rgba(130,235,190,0.55)'; ctx.lineWidth = 1.5 * dpr;
-  let p = pos(sweep, R);
-  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]); ctx.stroke();
+  // rotating sweep with a fading trail (only while animation is on)
+  if (animOn){
+    const sweep = (ts % 4000) / 4000 * Math.PI * 2;     // one turn / 4 s
+    const trail = toRad(80);
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, sweep - Math.PI/2 - trail, sweep - Math.PI/2); ctx.closePath();
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+    g.addColorStop(0, 'rgba(90,210,170,0)');
+    g.addColorStop(1, 'rgba(90,210,170,0.16)');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(130,235,190,0.55)'; ctx.lineWidth = 1.5 * dpr;
+    const p = pos(sweep, R);
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]); ctx.stroke();
+  }
 
   // range rings + labels, then the outer ring
   ctx.font = `${11 * dpr}px -apple-system, system-ui, sans-serif`;
@@ -363,15 +366,24 @@ function drawRadar(ts){
   ctx.strokeStyle = 'rgba(120,200,230,0.22)'; ctx.lineWidth = 1.5 * dpr;
   ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
 
-  // north indicator (heading-up: N sits at relative bearing -heading)
-  if (radarFix && radarFix.heading != null){
-    const np = pos(toRad((360 - radarFix.heading) % 360), R - 9 * dpr);
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${12 * dpr}px -apple-system, system-ui, sans-serif`;
-    ctx.fillText('N', np[0], np[1]);
-    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  // compass bezel (rotates heading-up): ticks every 30°, cardinals labelled, N red
+  const chd = (radarFix && radarFix.heading != null) ? radarFix.heading : 0;
+  for (let deg = 0; deg < 360; deg += 30){
+    const rel = toRad((deg - chd + 360) % 360);
+    const major = (deg % 90 === 0);
+    const ip = pos(rel, R - (major ? 10 : 6) * dpr), op = pos(rel, R - 1.5 * dpr);
+    ctx.strokeStyle = major ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = (major ? 1.5 : 1) * dpr;
+    ctx.beginPath(); ctx.moveTo(ip[0], ip[1]); ctx.lineTo(op[0], op[1]); ctx.stroke();
   }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `bold ${12 * dpr}px -apple-system, system-ui, sans-serif`;
+  for (const card of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]){
+    const lp = pos(toRad((card[1] - chd + 360) % 360), R - 22 * dpr);
+    ctx.fillStyle = (card[0] === 'N') ? '#ff5a4d' : 'rgba(255,255,255,0.55)';
+    ctx.fillText(card[0], lp[0], lp[1]);
+  }
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 
   // camera blips
   for (const dot of radarDots){
@@ -388,7 +400,7 @@ function drawRadar(ts){
   }
 
   // pulse ring on the nearest camera ahead
-  if (radarNearest){
+  if (animOn && radarNearest){
     const [x, y] = pos(radarNearest.ang, R * radarNearest.rr);
     const ph = (ts % 1600) / 1600;
     ctx.strokeStyle = `rgba(255,69,58,${(1 - ph) * 0.55})`; ctx.lineWidth = 2 * dpr;
@@ -404,7 +416,7 @@ function drawRadar(ts){
 }
 
 function ensureRadarLoop(){
-  if (!radarOn || $('hud').hidden || radarRAF) return;
+  if (!radarOn || !animOn || $('hud').hidden || radarRAF) return;
   const loop = (ts) => {
     radarRAF = requestAnimationFrame(loop);
     if (ts - radarLastDraw < 33) return;   // throttle to ~30 fps
@@ -419,7 +431,8 @@ function stopRadarLoop(){
 function applyRadar(){
   const hidden = !radarOn;
   $('radar').classList.toggle('hidden', hidden);
-  if (hidden) stopRadarLoop(); else ensureRadarLoop();
+  if (hidden){ stopRadarLoop(); return; }
+  if (animOn) ensureRadarLoop(); else { stopRadarLoop(); drawRadar(performance.now()); }
 }
 function showAlertUI(active, d){
   $('alertCard').classList.remove('hidden');
@@ -439,6 +452,7 @@ function syncSegs(){
   document.querySelectorAll('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
   document.querySelectorAll('#radarSeg button').forEach(b => b.classList.toggle('on', (b.dataset.radar === 'on') === radarOn));
   document.querySelectorAll('#diagSeg button').forEach(b => b.classList.toggle('on', (b.dataset.diag === 'on') === diagOn));
+  document.querySelectorAll('#animSeg button').forEach(b => b.classList.toggle('on', (b.dataset.anim === 'on') === animOn));
 }
 function populateVoices(){
   const sel = $('voiceSel'); if (!sel) return;
@@ -503,7 +517,7 @@ async function forceRefresh(){
 function start(){
   $('startScreen').hidden = true;
   $('hud').hidden = false;
-  ensureRadarLoop();       // animate the scope immediately (even before the first GPS fix)
+  applyRadar();            // draw/animate the scope (respects the animation on/off setting)
   updateGpsBanner(null);   // show "Acquiring GPS…" until the first fix arrives
   beep(0.001, 440);   // unlock WebAudio on the user gesture
   speak(' ');         // prime speechSynthesis
@@ -553,6 +567,11 @@ function init(){
     diagOn = (x === 'on');
     localStorage.setItem('diag', diagOn ? '1' : '0');
     syncSegs(); if (!diagOn) $('diag').textContent = '';
+  });
+  $('animSeg').addEventListener('click', e => {
+    const x = e.target.dataset.anim; if (!x) return;
+    animOn = (x === 'on'); localStorage.setItem('anim', animOn ? '1' : '0');
+    syncSegs(); applyRadar();
   });
   $('voiceSel').addEventListener('change', e => { voiceName = e.target.value; localStorage.setItem('voice', voiceName); });
   $('voiceTest').addEventListener('click', () => {
