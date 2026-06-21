@@ -22,8 +22,8 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
 ]
 
-# Nordic countries by ISO 3166-1 alpha-2.
-DEFAULT_COUNTRIES = ["SE", "NO", "DK", "FI", "IS", "IT"]
+# Default countries by ISO 3166-1 alpha-2.
+DEFAULT_COUNTRIES = ["SE", "NO", "DK", "FI", "IS", "IT", "DE", "FR", "LU", "NL", "AT"]
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # Canonical copy lives next to this script; a second copy is written into the app

@@ -83,6 +83,26 @@ body.danger{ background:#3a0d0a; }
   padding:9px 16px; border-radius:9px; font-size:15px; font-weight:600; cursor:pointer;
 }
 .seg button.on{ background:var(--warn); color:#000; }
+.settings-heading{
+  font-size:16px; color:var(--muted); text-transform:uppercase; letter-spacing:1px;
+  margin:18px 0 2px; padding-top:14px; border-top:1px solid rgba(255,255,255,.07);
+}
+.slider-label{ display:flex; justify-content:space-between; align-items:center; }
+.slider-label em{ color:var(--warn); font-style:normal; font-weight:700; font-size:15px; }
+.cfg-range{
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:6px; border-radius:3px; margin-top:8px;
+  background:rgba(255,255,255,.12); outline:none;
+}
+.cfg-range::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width:26px; height:26px; border-radius:50%;
+  background:var(--warn); cursor:pointer; border:none;
+}
+.cfg-range::-moz-range-thumb{
+  width:26px; height:26px; border-radius:50%;
+  background:var(--warn); cursor:pointer; border:none;
+}
 #voiceSel{
   width:100%; padding:12px; font-size:15px; border-radius:11px;
   background:#0d1218; color:var(--fg); border:1px solid rgba(255,255,255,.12);

@@ -26,6 +26,9 @@
         It's experimental and <strong>will</strong> have bugs, miss cameras, or show wrong
         speed limits. Use entirely at your own risk and never rely on it — it's only a
         driving aid, not a substitute for watching the road and your speedometer.
+        <strong>Speed camera alerts may not be legal in all jurisdictions. It is solely
+        your responsibility to check and comply with the laws in your country and
+        region.</strong> The developer assumes no liability.
         Keeps the screen awake and speaks warnings; mount the phone and use Bluetooth audio.</p>
     </div>
   </div>
@@ -99,11 +102,45 @@
       </div>
 
       <div class="srow">
+        <span>Vibration</span>
+        <div class="seg" id="vibSeg">
+          <button data-vib="on">On</button>
+          <button data-vib="off">Off</button>
+        </div>
+      </div>
+
+      <div class="srow">
         <span>Diagnostics</span>
         <div class="seg" id="diagSeg">
           <button data-diag="on">On</button>
           <button data-diag="off">Off</button>
         </div>
+      </div>
+
+      <h3 class="settings-heading">Warning distances</h3>
+
+      <div class="srow col">
+        <div class="slider-label"><span>Warning time</span><em id="cfg_leadSeconds_val">18 s</em></div>
+        <input type="range" class="cfg-range" id="cfg_leadSeconds" min="10" max="30" step="1">
+      </div>
+      <div class="srow col">
+        <div class="slider-label"><span>Min warning</span><em id="cfg_minWarn_val">250 m</em></div>
+        <input type="range" class="cfg-range" id="cfg_minWarn" min="100" max="500" step="25">
+      </div>
+      <div class="srow col">
+        <div class="slider-label"><span>Max warning</span><em id="cfg_maxWarn_val">800 m</em></div>
+        <input type="range" class="cfg-range" id="cfg_maxWarn" min="400" max="1500" step="50">
+      </div>
+      <div class="srow col">
+        <div class="slider-label"><span>Close alert</span><em id="cfg_nearDist_val">180 m</em></div>
+        <input type="range" class="cfg-range" id="cfg_nearDist" min="50" max="300" step="10">
+      </div>
+      <div class="srow col">
+        <div class="slider-label"><span>Radar range</span><em id="cfg_radarRange_val">1000 m</em></div>
+        <input type="range" class="cfg-range" id="cfg_radarRange" min="500" max="2000" step="100">
+      </div>
+      <div class="srow">
+        <button id="resetConfig" class="ghost" style="width:100%;font-size:14px">Reset to defaults</button>
       </div>
 
       <div class="srow col">

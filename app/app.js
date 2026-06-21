@@ -19,7 +19,13 @@ const CONFIG = {
   radarRange: 1000,    // m — outer ring of the radar view
 };
 
-const APP_VERSION = 'v0.13';
+const CONFIG_DEFAULTS = { ...CONFIG };
+for (const k of Object.keys(CONFIG)){
+  const v = localStorage.getItem('cfg_' + k);
+  if (v != null) CONFIG[k] = Number(v);
+}
+
+const APP_VERSION = 'v0.14';
 
 let CAMERAS = [];
 let ZONES = [];
@@ -27,6 +33,7 @@ let muted = false;
 let radarOn = localStorage.getItem('radarOn') !== '0';   // default ON
 let diagOn = localStorage.getItem('diag') !== '0';       // diagnostics line, default ON
 let animOn = localStorage.getItem('anim') !== '0';       // radar animation (sweep/pulse), default ON
+let vibrateOn = localStorage.getItem('vibrate') !== '0'; // haptic feedback, default ON
 let units = localStorage.getItem('units') || 'metric';   // 'metric' | 'imperial'
 let lang  = localStorage.getItem('lang')  || 'en';       // 'en' | 'sv'
 let voiceName = localStorage.getItem('voice') || '';     // '' = auto
@@ -219,16 +226,23 @@ function handleAlert(active, speed){
   if (warnState.stage < 1 && d <= wd){
     warnState.stage = 1;
     beep(0.12, active.type === 'zone' ? 660 : 880);
+    vibrate(200);
     announce(active);
   } else if (warnState.stage < 2 && d <= CONFIG.nearDist){
     warnState.stage = 2;
     beep(0.22, 1320);
+    vibrate([200, 100, 300]);
   }
 }
 function announce(active){
   if (active.type === 'cam') speak(cameraPhrase(active.limit));
   else if (active.kind === 'start') speak(zonePhrase(active.limit));
   else speak(zoneEndPhrase());
+}
+
+// ---------- haptic ----------
+function vibrate(pattern){
+  if (vibrateOn && navigator.vibrate) navigator.vibrate(pattern);
 }
 
 // ---------- audio ----------
@@ -447,12 +461,31 @@ function clearAlertUI(){
 }
 
 // ---------- settings ----------
+const CFG_SLIDERS = [
+  ['leadSeconds', ' s'], ['minWarn', ' m'], ['maxWarn', ' m'],
+  ['nearDist', ' m'], ['radarRange', ' m'],
+];
 function syncSegs(){
   document.querySelectorAll('#unitSeg button').forEach(b => b.classList.toggle('on', b.dataset.units === units));
   document.querySelectorAll('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
   document.querySelectorAll('#radarSeg button').forEach(b => b.classList.toggle('on', (b.dataset.radar === 'on') === radarOn));
   document.querySelectorAll('#diagSeg button').forEach(b => b.classList.toggle('on', (b.dataset.diag === 'on') === diagOn));
   document.querySelectorAll('#animSeg button').forEach(b => b.classList.toggle('on', (b.dataset.anim === 'on') === animOn));
+  document.querySelectorAll('#vibSeg button').forEach(b => b.classList.toggle('on', (b.dataset.vib === 'on') === vibrateOn));
+}
+function syncConfigSliders(){
+  for (const [key, unit] of CFG_SLIDERS){
+    const el = $('cfg_' + key);
+    if (!el) continue;
+    el.value = CONFIG[key];
+    const lbl = $('cfg_' + key + '_val');
+    if (lbl) lbl.textContent = CONFIG[key] + unit;
+  }
+}
+function resetConfig(){
+  Object.assign(CONFIG, CONFIG_DEFAULTS);
+  for (const k of Object.keys(CONFIG_DEFAULTS)) localStorage.removeItem('cfg_' + k);
+  syncConfigSliders();
 }
 function populateVoices(){
   const sel = $('voiceSel'); if (!sel) return;
@@ -464,7 +497,7 @@ function populateVoices(){
     list.map(v => `<option value="${v.name.replace(/"/g, '')}">${v.name} (${v.lang})${v.localService ? '' : ' ☁'}</option>`).join('');
   sel.value = voiceName;
 }
-function openSettings(){ syncSegs(); populateVoices(); $('settings').hidden = false; }
+function openSettings(){ syncSegs(); syncConfigSliders(); populateVoices(); $('settings').hidden = false; }
 function closeSettings(){ $('settings').hidden = true; }
 
 // ---------- lifecycle ----------
@@ -573,6 +606,22 @@ function init(){
     animOn = (x === 'on'); localStorage.setItem('anim', animOn ? '1' : '0');
     syncSegs(); applyRadar();
   });
+  $('vibSeg').addEventListener('click', e => {
+    const x = e.target.dataset.vib; if (!x) return;
+    vibrateOn = (x === 'on'); localStorage.setItem('vibrate', vibrateOn ? '1' : '0');
+    syncSegs();
+  });
+  for (const [key, unit] of CFG_SLIDERS){
+    const el = $('cfg_' + key);
+    if (!el) continue;
+    el.addEventListener('input', () => {
+      CONFIG[key] = Number(el.value);
+      localStorage.setItem('cfg_' + key, CONFIG[key]);
+      const lbl = $('cfg_' + key + '_val');
+      if (lbl) lbl.textContent = CONFIG[key] + unit;
+    });
+  }
+  $('resetConfig').addEventListener('click', resetConfig);
   $('voiceSel').addEventListener('change', e => { voiceName = e.target.value; localStorage.setItem('voice', voiceName); });
   $('voiceTest').addEventListener('click', () => {
     if ('speechSynthesis' in window){ speechSynthesis.cancel(); speechSynthesis.speak(utter(cameraPhrase(60))); }
