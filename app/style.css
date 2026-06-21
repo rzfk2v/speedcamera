@@ -60,8 +60,8 @@ body.danger{ background:#3a0d0a; }
 }
 #diag{ margin-top:4px; font-size:13px; color:var(--warn); }
 #diag:empty{ display:none; }
-#menuBtn{ position:fixed; top:16px; right:16px; }
-#muteBtn{ position:fixed; top:16px; right:72px; }
+#menuBtn{ position:fixed; top:16px; left:16px; }
+#muteBtn{ position:fixed; top:16px; left:72px; }
 
 /* Settings sheet */
 .sheet{
@@ -132,7 +132,7 @@ body.danger{ background:#3a0d0a; }
   font-size:15px; font-weight:600; text-align:center; line-height:1.35;
 }
 .banner.warn{ background:rgba(255,159,10,.20); color:#ffcf6a; }
-.version{ position:fixed; top:18px; left:16px; color:var(--muted); font-size:13px; }
+.version{ position:fixed; top:18px; right:16px; color:var(--muted); font-size:13px; }
 .hidden{ display:none !important; }
 
 /* Radar — offline situational view (no map tiles) */
