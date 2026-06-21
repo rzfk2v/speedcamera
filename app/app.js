@@ -225,12 +225,15 @@ function handleAlert(active, speed){
 
   if (warnState.stage < 1 && d <= wd){
     warnState.stage = 1;
-    beep(0.12, active.type === 'zone' ? 660 : 880);
+    // ascending chime: two bell-like tones (zones get a lower pitch)
+    const base = active.type === 'zone' ? 523 : 659;
+    chime([[base, 0, 0.4], [base * 1.5, 0.12, 0.5]]);
     vibrate(200);
     announce(active);
   } else if (warnState.stage < 2 && d <= CONFIG.nearDist){
     warnState.stage = 2;
-    beep(0.22, 1320);
+    // urgent triple chime
+    chime([[1047, 0, 0.25], [1319, 0.1, 0.25], [1568, 0.2, 0.35]]);
     vibrate([200, 100, 300]);
   }
 }
@@ -247,18 +250,50 @@ function vibrate(pattern){
 
 // ---------- audio ----------
 let audioCtx = null;
+function getAudioCtx(){
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
 function beep(dur = 0.12, freq = 880){
   if (muted) return;
   try{
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    const ctx = getAudioCtx();
+    const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = 'sine'; o.frequency.value = freq;
-    o.connect(g); g.connect(audioCtx.destination);
-    const now = audioCtx.currentTime;
+    o.connect(g); g.connect(ctx.destination);
+    const now = ctx.currentTime;
     g.gain.setValueAtTime(0.0001, now);
     g.gain.exponentialRampToValueAtTime(0.4, now + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     o.start(now); o.stop(now + dur + 0.02);
+  }catch(e){ /* ignore */ }
+}
+function chime(notes){
+  if (muted) return;
+  try{
+    const ctx = getAudioCtx(), now = ctx.currentTime;
+    for (const [freq, delay, dur] of notes){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      const h1 = ctx.createOscillator(), h1g = ctx.createGain();
+      h1.type = 'sine'; h1.frequency.value = freq * 2.0;
+      h1g.gain.value = 0.15;
+      const h2 = ctx.createOscillator(), h2g = ctx.createGain();
+      h2.type = 'sine'; h2.frequency.value = freq * 3.0;
+      h2g.gain.value = 0.06;
+      const mix = ctx.createGain();
+      o.connect(g); g.connect(mix);
+      h1.connect(h1g); h1g.connect(mix);
+      h2.connect(h2g); h2g.connect(mix);
+      mix.connect(ctx.destination);
+      const t = now + delay;
+      mix.gain.setValueAtTime(0.0001, t);
+      mix.gain.exponentialRampToValueAtTime(0.35, t + 0.015);
+      mix.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur + 0.02);
+      h1.start(t); h1.stop(t + dur + 0.02);
+      h2.start(t); h2.stop(t + dur + 0.02);
+    }
   }catch(e){ /* ignore */ }
 }
 function utter(text){            // build an utterance with the chosen voice/lang
